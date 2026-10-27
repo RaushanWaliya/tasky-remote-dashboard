@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tasky Remote - Sign in</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="login-body">
+  <div class="login-card">
+    <div class="login-logo">Tasky Remote</div>
+    <p class="login-sub">Remote monitoring and management console</p>
+
+    <form id="loginForm">
+      <label>Username</label>
+      <input type="text" id="username" autocomplete="username" required />
+
+      <label>Password</label>
+      <input type="password" id="password" autocomplete="current-password" required />
+
+      <button type="submit">Sign in</button>
+      <div id="loginError" class="error-text"></div>
+    </form>
+
+    <details class="settings-box">
+      <summary>Server settings</summary>
+      <label>Backend URL</label>
+      <input type="text" id="apiBaseUrl" placeholder="https://localhost:5091" />
+      <button type="button" id="saveSettingsBtn">Save</button>
+    </details>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    const apiBaseUrlInput = document.getElementById("apiBaseUrl");
+    apiBaseUrlInput.value = RemoteAdminConfig.getApiBaseUrl();
+
+    document.getElementById("saveSettingsBtn").addEventListener("click", () => {
+      RemoteAdminConfig.setApiBaseUrl(apiBaseUrlInput.value.trim());
+      alert("Saved. The backend URL will be used on your next sign in.");
+    });
+
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const errorBox = document.getElementById("loginError");
+      errorBox.textContent = "";
+
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+
+      try {
+        const result = await RemoteAdminApi.login(username, password);
+        RemoteAdminConfig.setSession(result.token, result.username, result.role);
+        window.location.href = "dashboard.html";
+      } catch (err) {
+        errorBox.textContent = err.message || "Sign in failed.";
+      }
+    });
+
+    // Already signed in? skip straight to the dashboard.
+    if (RemoteAdminConfig.getToken()) {
+      window.location.href = "dashboard.html";
+    }
+  </script>
+</body>
+</html>

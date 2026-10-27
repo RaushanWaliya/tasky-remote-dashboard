@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tasky Remote - Dashboard</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-logo">Tasky Remote</div>
+    <div class="topbar-right">
+      <span id="whoami"></span>
+      <button id="newKeyBtn" class="secondary-btn">New enrollment key</button>
+      <button id="logoutBtn" class="secondary-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="machine-list">
+      <div class="machine-list-header">Machines</div>
+      <div id="machineList"></div>
+    </aside>
+
+    <section class="machine-detail" id="machineDetail">
+      <div class="empty-state">Select a machine on the left to monitor or manage it.</div>
+    </section>
+  </main>
+
+  <div id="keyModal" class="modal hidden">
+    <div class="modal-card">
+      <h3>New enrollment key</h3>
+      <p class="muted">Give this to the agent installer on a new machine. It is shown only once.</p>
+      <label>Label</label>
+      <input type="text" id="keyLabel" placeholder="e.g. Mumbai branch laptops" />
+      <button id="generateKeyBtn">Generate</button>
+      <div id="keyResult" class="key-result hidden">
+        <label>Plain key (copy now)</label>
+        <textarea id="keyPlainValue" readonly></textarea>
+      </div>
+      <button id="closeKeyModalBtn" class="secondary-btn">Close</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/realtime.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>
