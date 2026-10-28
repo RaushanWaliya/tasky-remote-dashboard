@@ -22,6 +22,7 @@ class RemoteAdminRealtime {
     this.connection.on("CommandUpdated", (c) => this.handlers.onCommandUpdated?.(c));
     this.connection.on("ScreenFrame", (machineId, base64Jpeg) => this.handlers.onScreenFrame?.(machineId, base64Jpeg));
     this.connection.on("FileTransferUpdated", (f) => this.handlers.onFileTransferUpdated?.(f));
+    this.connection.on("ClipboardTextReceived", (machineId, text) => this.handlers.onClipboardTextReceived?.(machineId, text));
 
     await this.connection.start();
   }
@@ -40,6 +41,18 @@ class RemoteAdminRealtime {
 
   sendKeyEvent(machineId, eventType, virtualKeyCode) {
     return this.connection?.invoke("SendKeyEvent", machineId, eventType, virtualKeyCode);
+  }
+
+  sendCtrlAltDel(machineId) {
+    return this.connection?.invoke("SendCtrlAltDel", machineId);
+  }
+
+  setClipboardText(machineId, text) {
+    return this.connection?.invoke("SetClipboardText", machineId, text);
+  }
+
+  requestClipboardText(machineId) {
+    return this.connection?.invoke("RequestClipboardText", machineId);
   }
 
   stop() {

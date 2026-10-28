@@ -15,6 +15,41 @@ const state = {
   commandType: "0"
 };
 
+// Lets the operator exit the live screen's full screen mode with Escape
+// instead of having to find and click the button again. Registered once
+// here (not inside renderScreenTab) so repeated tab switches don't pile up
+// duplicate document level listeners.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const wrap = document.getElementById("screenFrameWrap");
+  if (wrap && wrap.classList.contains("fullscreen-mode")) {
+    exitScreenFullscreen();
+  }
+});
+
+function exitScreenFullscreen() {
+  const wrap = document.getElementById("screenFrameWrap");
+  const btn = document.getElementById("fullscreenBtn");
+  if (wrap) wrap.classList.remove("fullscreen-mode");
+  document.body.classList.remove("screen-fullscreen-active");
+  if (btn) btn.textContent = "Full screen";
+}
+
+// Rolling frame arrival timestamps for the live screen's fps indicator —
+// a simple, backend free stand in for "connection quality" since screen
+// frames (unlike tiny mouse/key events) are large enough that how often
+// they actually arrive is a decent proxy for how the connection is doing.
+let frameTimestamps = [];
+function recordFrameTimingAndGetFps() {
+  const now = performance.now();
+  frameTimestamps.push(now);
+  if (frameTimestamps.length > 6) frameTimestamps.shift();
+  if (frameTimestamps.length < 2) return null;
+  const spanMs = frameTimestamps[frameTimestamps.length - 1] - frameTimestamps[0];
+  if (spanMs <= 0) return null;
+  return ((frameTimestamps.length - 1) / spanMs) * 1000;
+}
+
 document.getElementById("whoami").textContent = RemoteAdminConfig.getUsername() || "";
 
 document.getElementById("logoutBtn").addEventListener("click", () => {
@@ -134,7 +169,10 @@ function renderDetail() {
   el.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tab === state.activeTab);
     btn.addEventListener("click", () => {
-      if (state.activeTab === "screen" && btn.dataset.tab !== "screen") stopScreenStreamIfActive();
+      if (state.activeTab === "screen" && btn.dataset.tab !== "screen") {
+        stopScreenStreamIfActive();
+        exitScreenFullscreen();
+      }
       state.activeTab = btn.dataset.tab;
       renderDetail();
     });
@@ -264,22 +302,45 @@ function showCommandResult(command) {
 // ---------- Live screen tab ----------
 
 function renderScreenTab(container, machine) {
+  frameTimestamps = [];
+  const startedAt = new Date().toLocaleTimeString();
+
   container.innerHTML = `
+    <div class="session-banner">
+      <span>Connected to <strong>${escapeHtml(machine.hostName)}</strong> · viewing since ${startedAt}</span>
+      <span id="qualityIndicator" class="quality-indicator">-- fps</span>
+    </div>
     <div class="screen-controls">
       <button id="startScreenBtn">Start live view</button>
       <button id="stopScreenBtn" class="secondary-btn">Stop</button>
+      <button id="fullscreenBtn" class="secondary-btn" title="Expand the live view to full screen">Full screen</button>
       <label class="control-toggle">
         <input type="checkbox" id="remoteControlToggle" />
         Enable remote control (mouse and keyboard act on the real machine)
       </label>
     </div>
-    <div class="screen-frame-wrap">
+    <div class="quick-actions">
+      <button id="ctrlAltDelBtn" class="secondary-btn" title="Best effort: only works while the agent runs as a Windows service with the Secure Attention Sequence policy enabled, see README">Ctrl+Alt+Del</button>
+      <button id="lockBtn" class="secondary-btn">Lock machine</button>
+      <button id="restartBtn" class="secondary-btn">Restart machine</button>
+      <button id="taskMgrBtn" class="secondary-btn">Open Task Manager</button>
+    </div>
+    <div class="clipboard-box">
+      <label>Shared clipboard</label>
+      <textarea id="clipboardText" rows="2" placeholder="Type or paste text here, then send it to the remote machine, or pull its clipboard into here."></textarea>
+      <div class="clipboard-actions">
+        <button id="pushClipboardBtn" class="secondary-btn">Send to remote clipboard</button>
+        <button id="pullClipboardBtn" class="secondary-btn">Get remote clipboard</button>
+      </div>
+    </div>
+    <div class="screen-frame-wrap" id="screenFrameWrap">
       <img id="screenFrame" alt="Live screen will appear here once streaming starts." />
     </div>
   `;
 
   document.getElementById("startScreenBtn").addEventListener("click", async () => {
     state.screenStreaming = true;
+    frameTimestamps = [];
     await realtime.startScreenStream(machine.id, 1000);
   });
   document.getElementById("stopScreenBtn").addEventListener("click", () => {
@@ -290,12 +351,61 @@ function renderScreenTab(container, machine) {
     if (img) img.removeAttribute("src");
     const toggle = document.getElementById("remoteControlToggle");
     if (toggle) toggle.checked = false;
+    const q = document.getElementById("qualityIndicator");
+    if (q) q.textContent = "-- fps";
   });
 
   const toggle = document.getElementById("remoteControlToggle");
   toggle.addEventListener("change", () => {
     if (toggle.checked) enableRemoteControl(machine.id);
     else disableRemoteControl();
+  });
+
+  document.getElementById("fullscreenBtn").addEventListener("click", () => {
+    const wrap = document.getElementById("screenFrameWrap");
+    const btn = document.getElementById("fullscreenBtn");
+    const goingFull = !wrap.classList.contains("fullscreen-mode");
+    wrap.classList.toggle("fullscreen-mode", goingFull);
+    document.body.classList.toggle("screen-fullscreen-active", goingFull);
+    btn.textContent = goingFull ? "Exit full screen (Esc)" : "Full screen";
+  });
+
+  document.getElementById("ctrlAltDelBtn").addEventListener("click", () => {
+    realtime.sendCtrlAltDel(machine.id);
+  });
+
+  document.getElementById("lockBtn").addEventListener("click", async () => {
+    try {
+      await RemoteAdminApi.sendCommand(machine.id, 0, "rundll32.exe user32.dll,LockWorkStation");
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  document.getElementById("restartBtn").addEventListener("click", async () => {
+    if (!confirm(`Restart ${machine.hostName} now? Any unsaved work on that machine will be lost.`)) return;
+    try {
+      await RemoteAdminApi.sendCommand(machine.id, 0, "shutdown /r /t 5");
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  document.getElementById("taskMgrBtn").addEventListener("click", async () => {
+    try {
+      await RemoteAdminApi.sendCommand(machine.id, 0, "taskmgr.exe");
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  document.getElementById("pushClipboardBtn").addEventListener("click", () => {
+    const text = document.getElementById("clipboardText").value;
+    realtime.setClipboardText(machine.id, text);
+  });
+
+  document.getElementById("pullClipboardBtn").addEventListener("click", () => {
+    realtime.requestClipboardText(machine.id);
   });
 }
 
@@ -388,6 +498,7 @@ function stopScreenStreamIfActive() {
     realtime.stopScreenStream(state.selectedMachineId);
   }
   state.screenStreaming = false;
+  exitScreenFullscreen();
 }
 
 // ---------- Files tab ----------
@@ -511,11 +622,24 @@ const realtime = new RemoteAdminRealtime({
     if (machineId === state.selectedMachineId && state.activeTab === "screen" && state.screenStreaming) {
       const img = document.getElementById("screenFrame");
       if (img) img.src = `data:image/jpeg;base64,${base64Jpeg}`;
+
+      const fps = recordFrameTimingAndGetFps();
+      const q = document.getElementById("qualityIndicator");
+      if (q && fps != null) q.textContent = `${fps.toFixed(1)} fps`;
     }
   },
   onFileTransferUpdated: (f) => {
     if (f.machineId === state.selectedMachineId && state.activeTab === "files") {
       loadFileHistory(f.machineId);
+    }
+  },
+  onClipboardTextReceived: (machineId, text) => {
+    if (machineId === state.selectedMachineId && state.activeTab === "screen") {
+      const box = document.getElementById("clipboardText");
+      if (box) box.value = text;
+      // Also hand it to the admin's own OS clipboard as a convenience, best
+      // effort since the browser may withhold permission.
+      navigator.clipboard?.writeText(text).catch(() => {});
     }
   }
 });

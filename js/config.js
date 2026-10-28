@@ -2,7 +2,7 @@
 // the default local https profile, or ask the person testing to set it
 // from the Settings box on the login page (saved to localStorage).
 const RemoteAdminConfig = {
-  defaultApiBaseUrl: "   https://taskyremoteapi-hjfvaygegacwg3a5.centralindia-01.azurewebsites.net",
+  defaultApiBaseUrl: "https://taskyremoteapi-hjfvaygegacwg3a5.centralindia-01.azurewebsites.net",
 
   getApiBaseUrl() {
     return localStorage.getItem("ra_apiBaseUrl") || this.defaultApiBaseUrl;
